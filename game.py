@@ -1,5 +1,5 @@
 import random
-from models import *
+from models import Stack, Queue, SortedCoordList, ShipBST
 
 SIZE = 10
 SHIPS = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]
@@ -8,7 +8,6 @@ EMPTY = '.'
 SHIP = 'S'
 HIT = 'X'
 MISS = 'O'
-
 
 def make_board():
     """Создаёт пустое игровое поле.
@@ -95,13 +94,6 @@ def find_ship_cells(board, row, col):
 
     return cells
 
-def is_ship_sunk(board, ship_cells):
-    """Проверяет, потоплен ли корабль полностью.
-    принимает: board - list[list[str]] - поле, ship_cells - list[tuple[int, int]] - клетки корабля
-    возвращает: bool - True если среди клеток корабля нет целых частей
-    """
-    return all(board[r][c] != SHIP for r, c in ship_cells)
-
 def get_zone_around(ship_cells):
     """Возвращает клетки вокруг потопленного корабля.
     принимает: ship_cells - list[tuple[int, int]] - клетки корабля
@@ -119,13 +111,16 @@ def get_zone_around(ship_cells):
 
     return zone
 
-def process_hit(board, row, col):
-    """Определяет клетки корабля и факт его потопления после попадания"""
+def _process_hit(board, row, col):
+    """Определяет клетки корабля и факт его потопления после попадания.
+    принимает: board - list[list[str]] - поле, row - int - строка, col - int - столбец
+    возвращает: tuple[list[tuple[int, int]], bool] - клетки корабля и флаг потопления
+    """
     ship_cells = find_ship_cells(board, row, col)
     sunk = all(board[r][c] != SHIP for r, c in ship_cells)
     return ship_cells, sunk
 
-def get_hunt_targets(board, hit_cells):
+def _get_hunt_targets(board, hit_cells):
     """Вычисляет приоритетные цели для добивания корабля.
     принимает: board - list[list[str]] - поле игрока, hit_cells - list[tuple[int, int]] - подбитые клетки
     возвращает: list[tuple[int, int]] - список целей в порядке приоритета
@@ -182,17 +177,17 @@ class PlacementController:
         self.ships = list(SHIPS)
 
     def toggle_orientation(self):
-        """Меняет ориентацию текущего корабля"""
+        """Меняет ориентацию текущего корабля."""
         self.horizontal = not self.horizontal
 
     def get_next_ship_length(self):
-        """Возвращает длину следующего корабля"""
+        """Возвращает длину следующего корабля."""
         if self.ship_index >= len(self.ships):
             return None
         return self.ships[self.ship_index]
 
     def is_finished(self):
-        """Проверяет, завершена ли ручная расстановка"""
+        """Проверяет, завершена ли ручная расстановка."""
         return self.ship_index >= len(self.ships)
 
     def get_ship_cells(self, row, col):
@@ -235,12 +230,23 @@ class PlacementController:
 
 # Миша
 class Game:
-    """Основная логика игры и работы компьютера"""
+    """Основная логика игры и работы компьютера."""
 
     def __init__(self):
-        """Создаёт объект игры и сбрасывает все состояния."""
+        """Создаёт объект игры и инициализирует все атрибуты."""
         self.player_board = None
         self.computer_board = None
+        self.current_turn = 'player'
+        self.history = Stack()
+        self.computer_targets = Queue()
+        self._hunt_hits = []
+        self.computer_coords = SortedCoordList(SIZE)
+        self.computer_bst = ShipBST()
+        self.shots = 0
+        self.hits = 0
+        self.player_shots = 0
+        self.enemy_sunk_ships = []
+        self.player_sunk_ships = []
 
     def setup(self, player_board=None):
         """Инициализирует игру. Если player_board не передан — расставляет корабли случайно.
@@ -259,7 +265,7 @@ class Game:
         self.current_turn = 'player'
         self.history = Stack()
         self.computer_targets = Queue()
-        self.hunt_hits = []
+        self._hunt_hits = []
         self.computer_coords = SortedCoordList(SIZE)
         self.computer_bst = ShipBST()
         self.shots = 0
@@ -310,7 +316,7 @@ class Game:
             self.computer_coords.remove(row, col)
             self.computer_bst.remove(row, col)
 
-            ship_cells, sunk = process_hit(self.computer_board, row, col)
+            ship_cells, sunk = _process_hit(self.computer_board, row, col)
             result['ship_cells'] = ship_cells
 
             if sunk:
@@ -328,7 +334,7 @@ class Game:
 
         self.computer_board[row][col] = MISS
         self.history.push(('player', row, col, EMPTY, None))
-        self.switch_turn()
+        self._switch_turn()
         return result
 
     def undo_player_shot(self):
@@ -395,7 +401,7 @@ class Game:
             if (r, c) in visited:
                 continue
 
-            ship_cells, sunk = process_hit(self.computer_board, r, c)
+            ship_cells, sunk = _process_hit(self.computer_board, r, c)
 
             for cell in ship_cells:
                 visited.add(cell)
@@ -409,7 +415,7 @@ class Game:
             'zones': zones,
         }
 
-    def computer_random_shot(self):
+    def _computer_random_shot(self):
         """Выбирает случайную необстрелянную клетку поля игрока.
         принимает: нет
         возвращает: tuple[int, int] - координаты клетки
@@ -421,7 +427,7 @@ class Game:
             if self.player_board[r][c] not in (HIT, MISS):
                 return r, c
 
-    def refill_hunt_queue(self):
+    def _refill_hunt_queue(self):
         """Пересчитывает очередь добивания по текущим подбитым клеткам.
         принимает: нет
         возвращает: None
@@ -431,7 +437,7 @@ class Game:
         if not self._hunt_hits:
             return
 
-        for target in get_hunt_targets(self.player_board, self._hunt_hits):
+        for target in _get_hunt_targets(self.player_board, self._hunt_hits):
             self.computer_targets.enqueue(target)
 
     def computer_shoot(self):
@@ -450,7 +456,7 @@ class Game:
                 break
 
         if row is None:
-            row, col = self.computer_random_shot()
+            row, col = self._computer_random_shot()
 
         cell = self.player_board[row][col]
         self.shots += 1
@@ -468,7 +474,7 @@ class Game:
             self.player_board[row][col] = HIT
             self.history.push(('computer', row, col, SHIP, None))
 
-            ship_cells, sunk = process_hit(self.player_board, row, col)
+            ship_cells, sunk = _process_hit(self.player_board, row, col)
             result['ship_cells'] = ship_cells
 
             if sunk:
@@ -483,7 +489,7 @@ class Game:
                     (r, c) for r, c in ship_cells
                     if self.player_board[r][c] == HIT
                 ]
-                self.refill_hunt_queue()
+                self._refill_hunt_queue()
                 result['result'] = 'hit'
 
             result['game_over'] = all_ships_sunk(self.player_board)
@@ -492,17 +498,17 @@ class Game:
         self.player_board[row][col] = MISS
         self.history.push(('computer', row, col, EMPTY, None))
 
-        if self.hunt_hits:
+        if self._hunt_hits:
             self._hunt_hits = [
-                (r, c) for r, c in self.hunt_hits
+                (r, c) for r, c in self._hunt_hits
                 if self.player_board[r][c] == HIT
             ]
-            self.refill_hunt_queue()
+            self._refill_hunt_queue()
 
-        self.switch_turn()
+        self._switch_turn()
         return result
 
-    def switch_turn(self):
+    def _switch_turn(self):
         """Передаёт ход другой стороне.
         принимает: нет
         возвращает: None
