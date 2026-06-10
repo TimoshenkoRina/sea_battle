@@ -1,6 +1,4 @@
 import random
-from collections import Counter
-
 from models import Stack, Queue, SortedCoordList, ShipBST
 
 SIZE = 10
@@ -19,7 +17,6 @@ def make_board():
     """
     return [[EMPTY] * SIZE for _ in range(SIZE)]
 
-
 def can_place(board, cells):
     """Проверяет, можно ли поставить корабль в клетки с учётом зазора.
     принимает: board - list[list[str]] - поле, cells - list[tuple[int, int]] - клетки корабля
@@ -32,7 +29,6 @@ def can_place(board, cells):
                 if 0 <= nr < SIZE and 0 <= nc < SIZE and board[nr][nc] == SHIP:
                     return False
     return True
-
 
 def place_ships(board):
     """Случайно расставляет все корабли на поле.
@@ -59,14 +55,12 @@ def place_ships(board):
                     board[r][c] = SHIP
                 placed = True
 
-
 def all_ships_sunk(board):
     """Проверяет, потоплены ли все корабли на поле.
     принимает: board - list[list[str]] - игровое поле
     возвращает: bool - True если живых клеток кораблей не осталось
     """
     return all(cell != SHIP for row in board for cell in row)
-
 
 def find_ship_cells(board, row, col):
     """Находит все клетки одного корабля по подбитой клетке.
@@ -93,14 +87,12 @@ def find_ship_cells(board, row, col):
 
     return cells
 
-
 def is_ship_sunk(board, ship_cells):
     """Проверяет, потоплен ли корабль полностью.
     принимает: board - list[list[str]] - поле, ship_cells - list[tuple[int, int]] - клетки корабля
     возвращает: bool - True если среди клеток корабля нет целых частей
     """
     return all(board[r][c] != SHIP for r, c in ship_cells)
-
 
 def get_zone_around(ship_cells):
     """Возвращает клетки вокруг потопленного корабля.
@@ -116,15 +108,6 @@ def get_zone_around(ship_cells):
                 if 0 <= nr < SIZE and 0 <= nc < SIZE and (nr, nc) not in ship_set:
                     zone.add((nr, nc))
     return zone
-
-
-def get_sorted_ships_stats(ships_list):
-    """Сортирует список длин кораблей по убыванию.
-    принимает: ships_list - list[int] - список длин кораблей
-    возвращает: list[int] - отсортированный список длин
-    """
-    return sorted(ships_list, reverse=True)
-
 
 def _get_hunt_targets(board, hit_cells):
     """Вычисляет приоритетные цели для добивания корабля.
@@ -175,7 +158,7 @@ def _get_hunt_targets(board, hit_cells):
 
 
 class PlacementController:
-    """Логика ручной расстановки кораблей без привязки к интерфейсу."""
+    """Логика ручной расстановки кораблей без привязки к интерфейсу"""
 
     def __init__(self):
         """Создаёт контроллер ручной расстановки."""
@@ -185,26 +168,16 @@ class PlacementController:
         self.ships = list(SHIPS)
 
     def toggle_orientation(self):
-        """Меняет ориентацию текущего корабля.
-        принимает: нет
-        возвращает: None
-        """
+        """Меняет ориентацию текущего корабля"""
         self.horizontal = not self.horizontal
 
     def get_next_ship_length(self):
-        """Возвращает длину следующего корабля.
-        принимает: нет
-        возвращает: int | None - длина корабля или None
-        """
-        if self.ship_index >= len(self.ships):
-            return None
+        """Возвращает длину следующего корабля"""
+        if self.ship_index >= len(self.ships): return None
         return self.ships[self.ship_index]
 
     def is_finished(self):
-        """Проверяет, завершена ли ручная расстановка.
-        принимает: нет
-        возвращает: bool - True если все корабли поставлены
-        """
+        """Проверяет, завершена ли ручная расстановка"""
         return self.ship_index >= len(self.ships)
 
     def get_ship_cells(self, row, col):
@@ -214,8 +187,10 @@ class PlacementController:
         """
         if self.is_finished():
             return []
+
         length = self.ships[self.ship_index]
         cells = []
+
         for i in range(length):
             r = row if self.horizontal else row + i
             c = col + i if self.horizontal else col
@@ -325,22 +300,7 @@ class Game:
         for length in self.enemy_sunk_ships:
             if length in remaining:
                 remaining.remove(length)
-        return get_sorted_ships_stats(remaining)
-
-    def get_enemy_ship_statistics(self):
-        """Возвращает статистику кораблей противника.
-        принимает: нет
-        возвращает: dict - полная статистика по кораблям
-        """
-        remaining = self.get_remaining_enemy_ships()
-        sunk = get_sorted_ships_stats(self.enemy_sunk_ships)
-        return {
-            'all': get_sorted_ships_stats(SHIPS),
-            'remaining': remaining,
-            'sunk': sunk,
-            'remaining_counter': Counter(remaining),
-            'sunk_counter': Counter(sunk),
-        }
+        return sorted(remaining, reverse=True)
 
     def get_enemy_alive_cells_in_row(self, row):
         """Возвращает живые клетки кораблей противника в заданной строке через BST.
