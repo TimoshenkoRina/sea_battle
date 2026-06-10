@@ -1,8 +1,8 @@
 import random
-from models import Stack, Queue
+from models import Stack, Queue, SortedCoordList, ShipBST
 
 SIZE = 10
-SHIPS = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]  # длины кораблей
+SHIPS = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]
 
 EMPTY = '.'
 SHIP = 'S'
@@ -10,14 +10,14 @@ HIT = 'X'
 MISS = 'O'
 
 
-def _make_board():
+def make_board():
     """Создаёт пустое игровое поле SIZE x SIZE.
     возвращает: list[list[str]] - двумерный список символов
     """
     return [[EMPTY] * SIZE for _ in range(SIZE)]
 
 
-def _place_ships(board):
+def place_ships(board):
     """Расставляет корабли на поле случайным образом.
     принимает: board - list[list[str]] - пустое поле
     возвращает: None (изменяет board на месте)
@@ -32,19 +32,17 @@ def _place_ships(board):
             else:
                 row = random.randint(0, SIZE - length)
                 col = random.randint(0, SIZE - 1)
-
-            # проверяем, что все клетки и соседи свободны
             cells = [
                 (row, col + i) if horizontal else (row + i, col)
                 for i in range(length)
             ]
-            if _can_place(board, cells):
+            if can_place(board, cells):
                 for r, c in cells:
                     board[r][c] = SHIP
                 placed = True
 
 
-def _can_place(board, cells):
+def can_place(board, cells):
     """Проверяет, можно ли поставить корабль в заданные клетки.
     принимает: board - list[list[str]], cells - list[(int, int)]
     возвращает: bool - True если место свободно с учётом зазора
@@ -59,24 +57,7 @@ def _can_place(board, cells):
     return True
 
 
-def _print_board(board, hide_ships=False):
-    """Выводит поле в консоль.
-    принимает: board - list[list[str]],
-               hide_ships - bool, скрыть ли символы кораблей (поле противника)
-    возвращает: None
-    """
-    print('  ' + ' '.join(str(i + 1) for i in range(SIZE)))
-    for i, row in enumerate(board):
-        row_str = []
-        for cell in row:
-            if hide_ships and cell == SHIP:
-                row_str.append(EMPTY)
-            else:
-                row_str.append(cell)
-        print(f'{i + 1:2} ' + ' '.join(row_str))
-
-
-def _all_ships_sunk(board):
+def all_ships_sunk(board):
     """Проверяет, все ли корабли потоплены.
     принимает: board - list[list[str]]
     возвращает: bool - True если ни одного SHIP не осталось
@@ -84,109 +65,152 @@ def _all_ships_sunk(board):
     return all(cell != SHIP for row in board for cell in row)
 
 
+def find_ship_cells(board, row, col):
+    """Находит все клетки корабля, которому принадлежит указанная клетка.
+    принимает: board - list[list[str]], row - int, col - int
+    возвращает: list[(int, int)] - список координат клеток корабля
+    """
+    cells = [(row, col)]
+    for r, c in cells:
+        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < SIZE and 0 <= nc < SIZE:
+                if board[nr][nc] == HIT and (nr, nc) not in cells:
+                    cells.append((nr, nc))
+    return cells
+
+
+def is_ship_sunk(board, ship_cells):
+    """Проверяет, полностью ли потоплен корабль.
+    принимает: board - list[list[str]], ship_cells - list[(int, int)]
+    возвращает: bool - True если рядом нет уцелевших клеток корабля
+    """
+    for r, c in ship_cells:
+        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < SIZE and 0 <= nc < SIZE and board[nr][nc] == SHIP:
+                return False
+    return True
+
+
+def get_zone_around(ship_cells):
+    """Возвращает клетки-зазор вокруг корабля (не занятые самим кораблём).
+    принимает: ship_cells - list[(int, int)]
+    возвращает: set[(int, int)] - множество клеток-зазора
+    """
+    ship_set = set(ship_cells)
+    zone = set()
+    for r, c in ship_cells:
+        for dr in range(-1, 2):
+            for dc in range(-1, 2):
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < SIZE and 0 <= nc < SIZE and (nr, nc) not in ship_set:
+                    zone.add((nr, nc))
+    return zone
+
+
+def get_sorted_ships_stats(ships_list):
+    """Возвращает отсортированный по длине список кораблей для статистики.
+    принимает: ships_list - list[int] - список длин кораблей
+    возвращает: list[int] - отсортированный по убыванию список длин
+    """
+    return sorted(ships_list, reverse=True)
+
+
 class Game:
-    """Управляет всей логикой партии: поля, ходы, проверка победы."""
+    """Управляет всей логикой партии: поля, ходы, структуры данных."""
 
     def __init__(self):
         """Инициализирует поля и вспомогательные структуры."""
         self.player_board = None
         self.computer_board = None
-        self.current_turn = 'player'  # 'player' или 'computer'
-        self.history = Stack()         # история ходов
-        self.computer_targets = Queue()  # приоритетные цели компьютера
-        self.shots = 0
-        self.hits = 0
-
-    def setup(self):
-        """Создаёт доску и случайно расставляет корабли для обоих участников.
-        возвращает: None
-        """
-        self.player_board = _make_board()
-        self.computer_board = _make_board()
-        _place_ships(self.player_board)
-        _place_ships(self.computer_board)
         self.current_turn = 'player'
         self.history = Stack()
         self.computer_targets = Queue()
+        self.computer_coords = SortedCoordList(SIZE)
+        self.computer_bst = ShipBST()
         self.shots = 0
         self.hits = 0
+        self.player_shots = 0
 
-    def player_turn(self):
-        """Полный ход игрока: показывает поле, принимает координаты и делает выстрел.
+    def setup(self):
+        """Создаёт доски и случайно расставляет корабли для обоих участников.
         возвращает: None
         """
-        print('\nВаше поле:')
-        _print_board(self.player_board)
-        print('\nПоле противника:')
-        _print_board(self.computer_board, hide_ships=True)
+        self.player_board = make_board()
+        self.computer_board = make_board()
+        place_ships(self.player_board)
+        place_ships(self.computer_board)
+        self.current_turn = 'player'
+        self.history = Stack()
+        self.computer_targets = Queue()
+        self.computer_coords = SortedCoordList(SIZE)
+        self.computer_bst = ShipBST()
+        self.shots = 0
+        self.hits = 0
+        self.player_shots = 0
+        # заполняем структуры координатами кораблей компьютера
+        for r in range(SIZE):
+            for c in range(SIZE):
+                if self.computer_board[r][c] == SHIP:
+                    self.computer_coords.add(r, c)
+                    self.computer_bst.insert(r, c)
 
-        while True:
-            try:
-                raw = input('Ваш выстрел (строка столбец, например: 3 5): ')
-                row, col = map(int, raw.split())
-                row -= 1
-                col -= 1
-                if not (0 <= row < SIZE and 0 <= col < SIZE):
-                    print('Координаты вне поля, попробуйте снова.')
-                    continue
-                cell = self.computer_board[row][col]
-                if cell in (HIT, MISS):
-                    print('Вы уже стреляли сюда, выберите другую клетку.')
-                    continue
-                break
-            except ValueError:
-                print('Введите два числа через пробел.')
-
+    def player_shoot(self, row, col):
+        """Выполняет выстрел игрока по полю компьютера.
+        принимает: row - int, col - int
+        возвращает: str - 'hit', 'sunk' или 'miss'
+        """
+        cell = self.computer_board[row][col]
         self.shots += 1
+        self.player_shots += 1
+
         if cell == SHIP:
             self.computer_board[row][col] = HIT
             self.hits += 1
-            print('Попадание!')
-            self.history.push(('player', row, col, HIT))
+            self.history.push(('player', row, col, SHIP))
+            self.computer_coords.remove(row, col)
+            self.computer_bst.remove(row, col)
+            ship_cells = find_ship_cells(self.computer_board, row, col)
+            if is_ship_sunk(self.computer_board, ship_cells):
+                return 'sunk'
+            return 'hit'
         else:
             self.computer_board[row][col] = MISS
-            print('Мимо.')
-            self.history.push(('player', row, col, MISS))
+            self.history.push(('player', row, col, EMPTY))
             self._switch_turn()
+            return 'miss'
 
-    def computer_turn(self):
-        """Полный ход компьютера: выбирает клетку (умно или случайно) и стреляет.
-        возвращает: None
+    def undo_player_shot(self):
+        """Отменяет последний ход игрока, восстанавливая состояние поля.
+        возвращает: tuple (row, col, old_state) если отмена выполнена, иначе None
         """
-        # берём приоритетную цель или случайную
-        if not self.computer_targets.is_empty():
-            row, col = self.computer_targets.dequeue()
-            # пропускаем уже обстрелянные
-            while self.player_board[row][col] in (HIT, MISS):
-                if self.computer_targets.is_empty():
-                    row, col = self._random_shot()
-                    break
-                row, col = self.computer_targets.dequeue()
-        else:
-            row, col = self._random_shot()
+        temp = []
+        result = None
+        while not self.history.is_empty():
+            entry = self.history.pop()
+            who, row, col, old_val = entry
+            if who == 'player':
+                current = self.computer_board[row][col]
+                self.computer_board[row][col] = old_val
+                if old_val == SHIP:
+                    # возвращаем клетку в структуры поиска
+                    self.computer_coords.add(row, col)
+                    self.computer_bst.insert(row, col)
+                    self.hits -= 1
+                self.shots -= 1
+                self.player_shots -= 1
+                result = (row, col, current)
+                break
+            else:
+                temp.append(entry)
+        # возвращаем временно извлечённые записи обратно в стек
+        for entry in reversed(temp):
+            self.history.push(entry)
+        return result
 
-        cell = self.player_board[row][col]
-        self.shots += 1
-        print(f'Компьютер стреляет в {row + 1} {col + 1}.')
-
-        if cell == SHIP:
-            self.player_board[row][col] = HIT
-            print('Компьютер попал!')
-            self.history.push(('computer', row, col, HIT))
-            # добавляем соседей в очередь приоритетов
-            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                nr, nc = row + dr, col + dc
-                if 0 <= nr < SIZE and 0 <= nc < SIZE:
-                    if self.player_board[nr][nc] not in (HIT, MISS):
-                        self.computer_targets.enqueue((nr, nc))
-        else:
-            self.player_board[row][col] = MISS
-            print('Компьютер промахнулся.')
-            self.history.push(('computer', row, col, MISS))
-            self._switch_turn()
-
-    def _random_shot(self):
-        """Выбирает случайную ещё не обстрелянную клетку.
+    def computer_random_shot(self):
+        """Выбирает случайную необстрелянную клетку поля игрока.
         возвращает: (int, int) - кортеж (row, col)
         """
         while True:
@@ -195,40 +219,55 @@ class Game:
             if self.player_board[r][c] not in (HIT, MISS):
                 return r, c
 
-    def run(self):
-        """Основной игровой цикл: чередует ходы до победы одной из сторон.
+    def computer_enqueue_neighbors(self, row, col):
+        """Добавляет необстрелянных соседей клетки в очередь приоритетов.
+        принимает: row - int, col - int
         возвращает: None
         """
-        while not self._is_finished():
-            if self.current_turn == 'player':
-                self.player_turn()
-            else:
-                self.computer_turn()
+        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nr, nc = row + dr, col + dc
+            if 0 <= nr < SIZE and 0 <= nc < SIZE:
+                if self.player_board[nr][nc] not in (HIT, MISS):
+                    self.computer_targets.enqueue((nr, nc))
 
-        self.print_stats()
-        if _all_ships_sunk(self.computer_board):
-            print('Вы победили!')
+    def computer_shoot(self):
+        """Выполняет ход компьютера: умный выбор цели или случайный.
+        возвращает: tuple (row, col, result) где result - 'hit', 'sunk' или 'miss'
+        """
+        if not self.computer_targets.is_empty():
+            row, col = self.computer_targets.dequeue()
+            while self.player_board[row][col] in (HIT, MISS):
+                if self.computer_targets.is_empty():
+                    row, col = self.computer_random_shot()
+                    break
+                row, col = self.computer_targets.dequeue()
         else:
-            print('Компьютер победил. Попробуйте ещё раз!')
+            row, col = self.computer_random_shot()
 
-    def print_stats(self):
-        """Собирает и выводит статистику партии.
-        возвращает: None
-        """
-        accuracy = (self.hits / self.shots * 100) if self.shots > 0 else 0
-        print(f'\n--- Статистика ---')
-        print(f'Всего выстрелов: {self.shots}')
-        print(f'Попаданий: {self.hits}')
-        print(f'Точность: {accuracy:.1f}%')
+        cell = self.player_board[row][col]
+        self.shots += 1
 
-    def _is_finished(self):
-        """Проверяет, закончилась ли игра (все корабли одной стороны потоплены).
-        возвращает: bool - True если игра окончена
+        if cell == SHIP:
+            self.player_board[row][col] = HIT
+            self.history.push(('computer', row, col, SHIP))
+            ship_cells = find_ship_cells(self.player_board, row, col)
+            if is_ship_sunk(self.player_board, ship_cells):
+                return row, col, 'sunk'
+            self.computer_enqueue_neighbors(row, col)
+            return row, col, 'hit'
+        else:
+            self.player_board[row][col] = MISS
+            self.history.push(('computer', row, col, EMPTY))
+            self._switch_turn()
+            return row, col, 'miss'
+
+    def get_accuracy(self):
+        """Вычисляет точность игрока в процентах.
+        возвращает: float - процент попаданий или 0.0 если выстрелов не было
         """
-        return (
-            _all_ships_sunk(self.computer_board)
-            or _all_ships_sunk(self.player_board)
-        )
+        if self.player_shots == 0:
+            return 0.0
+        return self.hits / self.player_shots * 100
 
     def _switch_turn(self):
         """Передаёт ход другому участнику.
@@ -238,3 +277,9 @@ class Game:
             self.current_turn = 'computer'
         else:
             self.current_turn = 'player'
+
+    def is_finished(self):
+        """Проверяет, закончилась ли игра.
+        возвращает: bool - True если все корабли одной стороны потоплены
+        """
+        return all_ships_sunk(self.computer_board) or all_ships_sunk(self.player_board)
