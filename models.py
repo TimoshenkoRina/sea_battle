@@ -1,4 +1,3 @@
-
 def bisect_left_manual(lst, value):
     """Ищет левую позицию для элемента в отсортированном списке"""
     left = 0
@@ -17,7 +16,6 @@ def insort_left_manual(lst, value):
     """Вставляет элемент в отсортированный список"""
     index = bisect_left_manual(lst, value)
     lst.insert(index, value)
-
 
 class Stack:
     """Стек для хранения истории ходов игрока"""
@@ -65,17 +63,13 @@ class Queue:
         return len(self.data) == 0
 
 class SortedCoordList:
-    """Отсортированный список координат для бинарного поиска.
-
-    Хранит координаты живых клеток кораблей в каждой строке/столбце.
-    Позволяет быстро проверить наличие целей через бинарный поиск.
-    """
+    """Отсортированный список координат для бинарного поиска"""
 
     def __init__(self, size):
         """Создаёт структуру для поля заданного размера"""
         self.size = size
-        self.rows = [[] for i in range(size)]
-        self.cols = [[] for i in range(size)]
+        self.rows = [[] for _ in range(size)]
+        self.cols = [[] for _ in range(size)]
 
     def add(self, row, col):
         """Добавляет координату клетки корабля"""
