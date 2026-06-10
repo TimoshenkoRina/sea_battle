@@ -2,10 +2,10 @@
 
 ## Проект выполнили 
 
-- Всеволод Матевосян - models
+- Всеволод Матевосян - models.py
 - Суворов Михаил - class Game и сопутствующие функции
-- Никита Бегун - class PlacementController и сопутствующие функции
-- Куликова Рина и Никита Бегун - gui
+- Никита Бегун - class PlacementController и сопутствующие функции, class BoardWidget
+- Куликова Рина - class SeaBattleApp
 
 ## Возможности
 
