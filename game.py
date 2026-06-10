@@ -132,6 +132,8 @@ class Game:
         self.shots = 0
         self.hits = 0
         self.player_shots = 0
+        # список длин потопленных игроком кораблей компьютера
+        self.enemy_sunk_ships = []
 
     def setup(self):
         """Создаёт доски и случайно расставляет корабли для обоих участников.
@@ -149,12 +151,22 @@ class Game:
         self.shots = 0
         self.hits = 0
         self.player_shots = 0
+        self.enemy_sunk_ships = []
         # заполняем структуры координатами кораблей компьютера
         for r in range(SIZE):
             for c in range(SIZE):
                 if self.computer_board[r][c] == SHIP:
                     self.computer_coords.add(r, c)
                     self.computer_bst.insert(r, c)
+
+    def get_remaining_enemy_ships(self):
+        """Возвращает отсортированный список длин ещё не потопленных кораблей противника.
+        возвращает: list[int] - оставшиеся корабли по убыванию длины
+        """
+        remaining = list(SHIPS)
+        for length in self.enemy_sunk_ships:
+            remaining.remove(length)
+        return sorted(remaining, reverse=True)
 
     def player_shoot(self, row, col):
         """Выполняет выстрел игрока по полю компьютера.
@@ -173,6 +185,7 @@ class Game:
             self.computer_bst.remove(row, col)
             ship_cells = find_ship_cells(self.computer_board, row, col)
             if is_ship_sunk(self.computer_board, ship_cells):
+                self.enemy_sunk_ships.append(len(ship_cells))
                 return 'sunk'
             return 'hit'
         else:
@@ -194,10 +207,14 @@ class Game:
                 current = self.computer_board[row][col]
                 self.computer_board[row][col] = old_val
                 if old_val == SHIP:
-                    # возвращаем клетку в структуры поиска
                     self.computer_coords.add(row, col)
                     self.computer_bst.insert(row, col)
                     self.hits -= 1
+                    # если отменяем потопление — убираем корабль из потопленных
+                    ship_cells = find_ship_cells(self.computer_board, row, col)
+                    length = len(ship_cells)
+                    if length in self.enemy_sunk_ships:
+                        self.enemy_sunk_ships.remove(length)
                 self.shots -= 1
                 self.player_shots -= 1
                 result = (row, col, current)
