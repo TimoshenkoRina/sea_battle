@@ -1,8 +1,7 @@
-import os
 import tkinter as tk
 from tkinter import messagebox
 
-from game import Game, PlacementController, SIZE, SHIP
+from game import *
 
 # цвета и настройки интерфейса
 COLOR_BG = '#1a1f2e'
@@ -21,14 +20,9 @@ COLOR_UNDO = '#f0a500'
 
 
 class BoardWidget:
-    """Виджет игрового поля: сетка кнопок с подсветкой и поддержкой hover."""
+    """Виджет игрового поля"""
 
     def __init__(self, parent, title, clickable, on_click=None):
-        """Создаёт фрейм с заголовком и сеткой клеток.
-        принимает: parent - tk.Widget, title - str, clickable - bool,
-                   on_click - callable(row, col) или None
-        возвращает: None
-        """
         self.clickable = clickable
         self.on_click = on_click
         self.buttons = {}
@@ -68,33 +62,23 @@ class BoardWidget:
                 self.buttons[(r, c)] = btn
 
                 if clickable:
-                    btn.bind('<Enter>', lambda e, b=btn, p=(r, c): self._hover(b, p, True))
-                    btn.bind('<Leave>', lambda e, b=btn, p=(r, c): self._hover(b, p, False))
-                    btn.config(command=lambda row=r, col=c: self._click(row, col))
+                    btn.bind('<Enter>', lambda e, b=btn, p=(r, c): self.hover(b, p, True))
+                    btn.bind('<Leave>', lambda e, b=btn, p=(r, c): self.hover(b, p, False))
+                    btn.config(command=lambda row=r, col=c: self.click(row, col))
 
-    def _hover(self, btn, pos, entering):
-        """Подсвечивает клетку при наведении, если она ещё не обстреляна.
-        принимает: btn - tk.Button, pos - tuple[int, int], entering - bool
-        возвращает: None
-        """
+    def hover(self, btn, pos, entering):
+        """Подсвечивает клетку при наведении, если она ещё не обстреляна"""
         if btn.cget('bg') in (COLOR_HIT, COLOR_MISS, COLOR_SHIP, COLOR_SUNK_ZONE):
             return
         btn.config(bg=COLOR_EMPTY_HVR if entering else COLOR_EMPTY)
 
-    def _click(self, row, col):
-        """Передаёт клик во внешний обработчик.
-        принимает: row - int, col - int
-        возвращает: None
-        """
+    def click(self, row, col):
+        """Передаёт клик во внешний обработчик"""
         if self.on_click:
             self.on_click(row, col)
 
     def set_cell(self, row, col, state):
-        """Обновляет цвет клетки по её состоянию.
-        принимает: row - int, col - int,
-                   state - str: 'ship', 'hit', 'miss', 'zone', 'empty'
-        возвращает: None
-        """
+        """Обновляет цвет клетки по её состоянию"""
         colors = {
             'ship': COLOR_SHIP,
             'hit': COLOR_HIT,
@@ -105,58 +89,45 @@ class BoardWidget:
         self.buttons[(row, col)].config(bg=colors.get(state, COLOR_EMPTY))
 
     def mark_sunk_zone(self, zone_cells):
-        """Закрашивает клетки-зазор вокруг потопленного корабля.
-        принимает: zone_cells - set[tuple[int, int]]
-        возвращает: None
-        """
+        """Закрашивает клетки вокруг потопленного корабля"""
         for r, c in zone_cells:
             if self.buttons[(r, c)].cget('bg') != COLOR_HIT:
                 self.set_cell(r, c, 'zone')
         self.sunk_zones.update(zone_cells)
 
     def disable_all(self):
-        """Отключает клики по всему полю.
-        принимает: нет
-        возвращает: None
-        """
+        """Отключает клики по всему полю"""
         for btn in self.buttons.values():
             btn.config(state='disabled', cursor='arrow')
 
 
 class SeaBattleApp:
-    """Класс главного окна приложения."""
+    """Класс главного окна приложения"""
 
     def __init__(self, root):
-        """Инициализирует окно, создаёт игру и строит интерфейс.
-        принимает: root - tk.Tk
-        возвращает: None
-        """
         self.root = root
         self.root.title('Морской бой')
         self.root.configure(bg=COLOR_BG)
         self.root.resizable(False, False)
 
         self.game = Game()
-        self._after_id = None
-        self._computer_thinking = False
-        self._placement_controller = None
-        self._player_board_click_enabled = False
-        self._win_image = None
+        self.after_id = None
+        self.computer_thinking = False
+        self.placement_controller = None
+        self.player_board_click_enabled = False
+        self.win_image = None
 
-        self._build_ui()
-        self.root.bind('<r>', self._toggle_placement_orientation)
-        self.root.bind('<R>', self._toggle_placement_orientation)
-        self._new_game()
+        self.build_ui()
+        self.root.bind('<r>', self.toggle_placement_orientation)
+        self.root.bind('<R>', self.toggle_placement_orientation)
+        self.new_game()
 
-    def _build_ui(self):
-        """Строит все виджеты интерфейса.
-        принимает: нет
-        возвращает: None
-        """
+    def build_ui(self):
+        """Строит все виджеты интерфейса"""
         header = tk.Frame(self.root, bg=COLOR_BG)
         header.pack(pady=(18, 4))
         tk.Label(
-            header, text='⚓  МОРСКОЙ БОЙ', bg=COLOR_BG, fg=COLOR_ACCENT,
+            header, text='МОРСКОЙ БОЙ', bg=COLOR_BG, fg=COLOR_ACCENT,
             font=('Arial', 18, 'bold')
         ).pack()
 
@@ -172,13 +143,13 @@ class SeaBattleApp:
         self.player_widget = BoardWidget(boards_frame, 'Ваше поле', clickable=False)
         self.enemy_widget = BoardWidget(
             boards_frame, 'Поле противника',
-            clickable=True, on_click=self._player_shot
+            clickable=True, on_click=self.player_shot
         )
 
         for r in range(SIZE):
             for c in range(SIZE):
                 self.player_widget.buttons[(r, c)].config(
-                    command=lambda row=r, col=c: self._player_board_click(row, col)
+                    command=lambda row=r, col=c: self.player_board_click(row, col)
                 )
 
         legend = tk.Frame(self.root, bg=COLOR_BG)
@@ -199,13 +170,13 @@ class SeaBattleApp:
         tk.Button(
             controls, text='Новая игра', bg='#2e3650', fg=COLOR_ACCENT,
             font=('Arial', 10, 'bold'), relief='flat', padx=16, pady=6,
-            activebackground='#3a4468', command=self._new_game
+            activebackground='#3a4468', command=self.new_game
         ).pack(side=tk.LEFT, padx=8)
 
         self.undo_btn = tk.Button(
             controls, text='Отменить ход', bg='#2e3650', fg=COLOR_UNDO,
             font=('Arial', 10, 'bold'), relief='flat', padx=16, pady=6,
-            activebackground='#3a4468', command=self._undo_shot
+            activebackground='#3a4468', command=self.undo_shot
         )
         self.undo_btn.pack(side=tk.LEFT, padx=8)
 
@@ -215,17 +186,29 @@ class SeaBattleApp:
             bg=COLOR_BG, fg='#7a8caa', font=('Arial', 9)
         ).pack(pady=(0, 14))
 
-    def _new_game(self):
-        """Сбрасывает состояние и начинает новую партию.
-        принимает: нет
-        возвращает: None
-        """
-        if self._after_id:
-            self.root.after_cancel(self._after_id)
-            self._after_id = None
-        self._computer_thinking = False
-        self._placement_controller = None
-        self._player_board_click_enabled = False
+    def reset_board_widgets(self, player_clickable=False):
+        """Сбрасывает визуальное состояние обоих полей"""
+        for r in range(SIZE):
+            for c in range(SIZE):
+                self.player_widget.set_cell(r, c, 'empty')
+                self.enemy_widget.set_cell(r, c, 'empty')
+                p_state = 'normal' if player_clickable else 'disabled'
+                p_cursor = 'hand2' if player_clickable else 'arrow'
+                e_state = 'disabled' if player_clickable else 'normal'
+                e_cursor = 'arrow' if player_clickable else 'hand2'
+                self.player_widget.buttons[(r, c)].config(state=p_state, cursor=p_cursor)
+                self.enemy_widget.buttons[(r, c)].config(state=e_state, cursor=e_cursor)
+        self.player_widget.sunk_zones.clear()
+        self.enemy_widget.sunk_zones.clear()
+
+    def new_game(self):
+        """Сбрасывает состояние и начинает новую игру"""
+        if self.after_id:
+            self.root.after_cancel(self.after_id)
+            self.after_id = None
+        self.computer_thinking = False
+        self.placement_controller = None
+        self.player_board_click_enabled = False
 
         manual = messagebox.askyesno(
             'Расстановка кораблей',
@@ -233,79 +216,52 @@ class SeaBattleApp:
         )
 
         if manual:
-            self._start_manual_setup()
+            self.start_manual_setup()
             return
 
         self.game.setup()
-        self._draw_initial_boards(show_player_ships=True)
+        self.reset_board_widgets(player_clickable=False)
+        for r in range(SIZE):
+            for c in range(SIZE):
+                if self.game.player_board[r][c] == SHIP:
+                    self.player_widget.set_cell(r, c, 'ship')
         self.status_var.set('Ваш ход — выберите клетку поля противника')
         self.undo_btn.config(state='normal')
-        self._update_stats_label()
+        self.update_stats_label()
 
-    def _draw_initial_boards(self, show_player_ships):
-        """Подготавливает оба поля к новой партии.
-        принимает: show_player_ships - bool - показывать ли корабли игрока
-        возвращает: None
-        """
-        for r in range(SIZE):
-            for c in range(SIZE):
-                cell = self.game.player_board[r][c]
-                player_state = 'ship' if show_player_ships and cell == SHIP else 'empty'
-                self.player_widget.set_cell(r, c, player_state)
-                self.enemy_widget.set_cell(r, c, 'empty')
-                self.enemy_widget.buttons[(r, c)].config(state='normal', cursor='hand2')
-                self.player_widget.buttons[(r, c)].config(state='disabled', cursor='arrow')
-
-        self.player_widget.sunk_zones.clear()
-        self.enemy_widget.sunk_zones.clear()
-
-    def _start_manual_setup(self):
-        """Запускает режим ручной расстановки кораблей.
-        принимает: нет
-        возвращает: None
-        """
+    def start_manual_setup(self):
+        """Запускает режим ручной расстановки кораблей"""
         self.game = Game()
-        self._placement_controller = PlacementController()
-        self._player_board_click_enabled = True
+        self.placement_controller = PlacementController()
+        self.player_board_click_enabled = True
 
-        for r in range(SIZE):
-            for c in range(SIZE):
-                self.player_widget.set_cell(r, c, 'empty')
-                self.enemy_widget.set_cell(r, c, 'empty')
-                self.enemy_widget.buttons[(r, c)].config(state='disabled', cursor='arrow')
-                self.player_widget.buttons[(r, c)].config(state='normal', cursor='hand2')
+        self.reset_board_widgets(player_clickable=True)
 
-        next_ship = self._placement_controller.get_next_ship_length()
+        next_ship = self.placement_controller.get_next_ship_length()
         self.status_var.set(
             f'Ручная расстановка. Поставьте корабль длины {next_ship}. R — поворот.'
         )
         self.undo_btn.config(state='disabled')
-        self._update_stats_label()
+        self.update_stats_label()
 
-    def _toggle_placement_orientation(self, event=None):
-        """Переключает ориентацию корабля в режиме ручной расстановки.
-        принимает: event - tk.Event | None
-        возвращает: None
-        """
-        if self._placement_controller is None:
+    def toggle_placement_orientation(self, event=None):
+        """Переключает ориентацию корабля в режиме ручной расстановки"""
+        if self.placement_controller is None:
             return
-        self._placement_controller.toggle_orientation()
-        next_ship = self._placement_controller.get_next_ship_length()
-        orientation = 'горизонтально' if self._placement_controller.horizontal else 'вертикально'
+        self.placement_controller.toggle_orientation()
+        next_ship = self.placement_controller.get_next_ship_length()
+        orientation = 'горизонтально' if self.placement_controller.horizontal else 'вертикально'
         self.status_var.set(
             f'Ручная расстановка. Поставьте корабль длины {next_ship} '
             f'({orientation}). R — поворот.'
         )
 
-    def _player_board_click(self, row, col):
-        """Обрабатывает клик по полю игрока во время ручной расстановки.
-        принимает: row - int, col - int
-        возвращает: None
-        """
-        if not self._player_board_click_enabled or self._placement_controller is None:
+    def player_board_click(self, row, col):
+        """Обрабатывает клик по полю игрока во время ручной расстановки"""
+        if not self.player_board_click_enabled or self.placement_controller is None:
             return
 
-        placed_cells = self._placement_controller.place_ship(row, col)
+        placed_cells = self.placement_controller.place_ship(row, col)
         if not placed_cells:
             self.status_var.set('Нельзя поставить корабль в эту позицию.')
             return
@@ -313,31 +269,28 @@ class SeaBattleApp:
         for r, c in placed_cells:
             self.player_widget.set_cell(r, c, 'ship')
 
-        if self._placement_controller.is_finished():
-            self.game.setup_with_player_board(self._placement_controller.board)
-            self._placement_controller = None
-            self._player_board_click_enabled = False
+        if self.placement_controller.is_finished():
+            self.game.setup(self.placement_controller.board)
+            self.placement_controller = None
+            self.player_board_click_enabled = False
             for r in range(SIZE):
                 for c in range(SIZE):
                     self.player_widget.buttons[(r, c)].config(state='disabled', cursor='arrow')
                     self.enemy_widget.buttons[(r, c)].config(state='normal', cursor='hand2')
             self.status_var.set('Ваш ход — выберите клетку поля противника')
             self.undo_btn.config(state='normal')
-            self._update_stats_label()
+            self.update_stats_label()
             return
 
-        next_ship = self._placement_controller.get_next_ship_length()
-        orientation = 'горизонтально' if self._placement_controller.horizontal else 'вертикально'
+        next_ship = self.placement_controller.get_next_ship_length()
+        orientation = 'горизонтально' if self.placement_controller.horizontal else 'вертикально'
         self.status_var.set(
             f'Поставлено. Теперь корабль длины {next_ship} ({orientation}). R — поворот.'
         )
 
-    def _player_shot(self, row, col):
-        """Обрабатывает выстрел игрока по клетке поля компьютера.
-        принимает: row - int, col - int
-        возвращает: None
-        """
-        if self._computer_thinking or self._placement_controller is not None:
+    def player_shot(self, row, col):
+        """Обрабатывает выстрел игрока по клетке поля компьютера"""
+        if self.computer_thinking or self.placement_controller is not None:
             return
         btn = self.enemy_widget.buttons[(row, col)]
         if btn.cget('state') == 'disabled':
@@ -360,26 +313,23 @@ class SeaBattleApp:
                 self.status_var.set('Попадание! Продолжайте ходить.')
 
             if shot_result['game_over']:
-                self._end_game(winner='player')
+                self.end_game(winner='player')
                 return
 
         else:
             self.enemy_widget.set_cell(row, col, 'miss')
             btn.config(state='disabled')
             self.status_var.set('Промах. Ход компьютера...')
-            self._computer_thinking = True
+            self.computer_thinking = True
             self.undo_btn.config(state='disabled')
-            self._after_id = self.root.after(700, self._computer_shot)
+            self.after_id = self.root.after(700, self.computer_shot)
             return
 
-        self._update_stats_label()
+        self.update_stats_label()
 
-    def _undo_shot(self):
-        """Отменяет последний выстрел игрока и восстанавливает клетку.
-        принимает: нет
-        возвращает: None
-        """
-        if self._computer_thinking or self._placement_controller is not None:
+    def undo_shot(self):
+        """Отменяет последний выстрел игрока и восстанавливает клетку"""
+        if self.computer_thinking or self.placement_controller is not None:
             return
         result = self.game.undo_player_shot()
         if result is None:
@@ -387,14 +337,11 @@ class SeaBattleApp:
             return
         row, col, _ = result
         self.status_var.set(f'Ход отменён ({row + 1}, {col + 1}). Стреляйте снова.')
-        self._restore_enemy_visual_state()
-        self._update_stats_label()
+        self.restore_enemy_visual_state()
+        self.update_stats_label()
 
-    def _restore_enemy_visual_state(self):
-        """Восстанавливает состояние поля противника по данным игры.
-        принимает: нет
-        возвращает: None
-        """
+    def restore_enemy_visual_state(self):
+        """Восстанавливает состояние поля противника по данным игры"""
         state = self.game.get_enemy_visual_state()
         hits = state['hits']
         misses = state['misses']
@@ -421,11 +368,8 @@ class SeaBattleApp:
 
         self.enemy_widget.sunk_zones.update(zones)
 
-    def _computer_shot(self):
-        """Выполняет ход компьютера и обновляет поле игрока.
-        принимает: нет
-        возвращает: None
-        """
+    def computer_shot(self):
+        """Выполняет ход компьютера и обновляет поле игрока"""
         self._after_id = None
         shot_result = self.game.computer_shoot()
         row = shot_result['row']
@@ -443,23 +387,20 @@ class SeaBattleApp:
                 self.status_var.set('Компьютер попал! Снова ход компьютера...')
 
             if shot_result['game_over']:
-                self._computer_thinking = False
-                self._end_game(winner='computer')
+                self.computer_thinking = False
+                self.end_game(winner='computer')
                 return
 
-            self._after_id = self.root.after(800, self._computer_shot)
+            self.after_id = self.root.after(800, self.computer_shot)
         else:
             self.player_widget.set_cell(row, col, 'miss')
             self.root.update_idletasks()
             self.status_var.set('Компьютер промахнулся. Ваш ход!')
-            self._computer_thinking = False
+            self.computer_thinking = False
             self.undo_btn.config(state='normal')
 
-    def _update_stats_label(self):
-        """Обновляет строку с оставшимися кораблями противника.
-        принимает: нет
-        возвращает: None
-        """
+    def update_stats_label(self):
+        """Обновляет строку с оставшимися кораблями противника"""
         remaining = self.game.get_remaining_enemy_ships()
         if remaining:
             ships_str = '  '.join(f'[{s}]' for s in remaining)
@@ -467,11 +408,8 @@ class SeaBattleApp:
         else:
             self.stats_var.set('Все корабли противника потоплены!')
 
-    def _end_game(self, winner):
-        """Завершает партию, блокирует поле и показывает итог.
-        принимает: winner - str: 'player' или 'computer'
-        возвращает: None
-        """
+    def end_game(self, winner):
+        """Завершает партию, блокирует поле и показывает итог"""
         self.enemy_widget.disable_all()
         self.undo_btn.config(state='disabled')
         if winner == 'player':
@@ -489,7 +427,6 @@ class SeaBattleApp:
         popup.resizable(False, False)
         popup.grab_set()
 
-
         tk.Label(
             popup, text=msg, bg=COLOR_SURFACE, fg=color,
             font=('Arial', 12, 'bold'), pady=20, padx=30
@@ -497,15 +434,11 @@ class SeaBattleApp:
         tk.Button(
             popup, text='Новая игра', bg='#2e3650', fg=COLOR_ACCENT,
             font=('Arial', 10, 'bold'), relief='flat', padx=14, pady=6,
-            command=lambda: (popup.destroy(), self._new_game())
+            command=lambda: (popup.destroy(), self.new_game())
         ).pack(pady=(0, 16))
 
 
 def main():
-    """Запускает tkinter-приложение.
-    принимает: нет
-    возвращает: None
-    """
     root = tk.Tk()
     SeaBattleApp(root)
     root.mainloop()
