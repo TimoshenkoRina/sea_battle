@@ -13,8 +13,8 @@ COLOR_MISS     = '#6c7a9c'  # промах
 COLOR_SUNK_ZONE= '#6c7a9c'  # зона вокруг потопленного корабля
 COLOR_TEXT     = '#e8eaf0'  # основной текст
 COLOR_ACCENT   = '#4fc3f7'  # заголовки, кнопки
-COLOR_WIN      = '#43e97b'
-COLOR_LOSE     = '#e63946'
+COLOR_WIN      = '#43e97b'  # текст победы
+COLOR_LOSE     = '#e63946'  # текст поражения
 COLOR_UNDO     = '#f0a500'  # кнопка отмены
 
 
@@ -30,75 +30,68 @@ class BoardWidget:
         возвращает: None
         """
         self.clickable = clickable
-        self.on_click = on_click
-        # словарь (row, col) → кнопка
+        self.on_click = on_click  #внешний обработчик клика
         self.buttons = {}
-        # множество клеток, закрашенных как зона вокруг потопленного корабля
-        self.sunk_zones = set()
+        self.sunk_zones = set()   #множество клеток зоны вокруг потопленного корабля
 
-        # внешний фрейм поля
-        frame = tk.Frame(parent, bg=COLOR_BG)
+        frame = tk.Frame(parent, bg=COLOR_BG)  #внешний фрейм поля
         frame.pack(side=tk.LEFT, padx=18)
 
-        # заголовок над полем
-        tk.Label(
+        tk.Label(  #заголовок над полем
             frame, text=title, bg=COLOR_BG, fg=COLOR_ACCENT,
             font=('Arial', 12, 'bold')
         ).pack(pady=(0, 8))
 
-        # сетка с нумерацией строк и столбцов
-        grid = tk.Frame(frame, bg=COLOR_BG)
-        grid.pack()
+        grid = tk.Frame(frame, bg=COLOR_BG)  #сетка с нумерацией строк и столбцов
+        grid.pack()  #размещаем сетку под заголовком
 
-        # пустая ячейка в левом верхнем углу (пересечение осей)
-        tk.Label(grid, text='', bg=COLOR_BG, width=2).grid(row=0, column=0)
+        #пустая ячейка в левом верхнем углу на месте пересечения осей
+        tk.Label(grid, text='', bg=COLOR_BG, width=2).grid(row=0, column=0)  #заполнитель этого места
 
-        # номера столбцов (верхняя строка) и строк (левый столбец)
-        for i in range(SIZE):
+        #ставим номера столбцов и строк
+        for i in range(SIZE):  #цикл от 0 до 9 для 10 строк и 10 столбцов
             tk.Label(
                 grid, text=str(i + 1), bg=COLOR_BG, fg='#7a8caa',
                 font=('Arial', 9), width=3
-            ).grid(row=0, column=i + 1)
+            ).grid(row=0, column=i + 1)  #номера столбца в нулевой строке сетки
             tk.Label(
                 grid, text=str(i + 1), bg=COLOR_BG, fg='#7a8caa',
                 font=('Arial', 9), width=2
-            ).grid(row=i + 1, column=0)
+            ).grid(row=i + 1, column=0)  #номера строки в нулевом столбце сетки
 
-        # создаём кнопку для каждой клетки поля
-        for r in range(SIZE):
+        for r in range(SIZE):  #создаём кнопку для каждой клетки поля, перебирая строки и столбцы
             for c in range(SIZE):
                 btn = tk.Button(
                     grid, width=2, height=1, bg=COLOR_EMPTY, bd=0,
                     relief='flat',
-                    cursor='hand2' if clickable else 'arrow',
-                    activebackground=COLOR_EMPTY_HVR
+                    cursor='hand2' if clickable else 'arrow',  #делаем курсор-руку для кликабельного поля и стрелку для некликабельного
+                    activebackground=COLOR_EMPTY_HVR  #подсветка при нажатии
                 )
                 btn.grid(row=r + 1, column=c + 1, padx=2, pady=2)
-                self.buttons[(r, c)] = btn
+                self.buttons[(r, c)] = btn  #сохраняем кнопку в словарь
 
-                # hover и клик — только для кликабельных полей
+                #делаем hover и клик
                 if clickable:
-                    btn.bind('<Enter>', lambda e, b=btn, p=(r, c): self._hover(b, p, True))
+                    btn.bind('<Enter>', lambda e, b=btn, p=(r, c): self._hover(b, p, True))  #делаем подсветку при наведении мыши
                     btn.bind('<Leave>', lambda e, b=btn, p=(r, c): self._hover(b, p, False))
-                    btn.config(command=lambda row=r, col=c: self._click(row, col))
+                    btn.config(command=lambda row=r, col=c: self._click(row, col))  #по клику передаём координаты во внешний обработчик
 
     def _hover(self, btn, pos, entering):
         """Подсвечивает клетку при наведении, если она ещё не обстреляна.
         принимает: btn - tk.Button, pos - tuple[int, int], entering - bool
         возвращает: None
         """
-        # уже закрашенные клетки не трогаем
-        if btn.cget('bg') in (COLOR_HIT, COLOR_MISS, COLOR_SHIP, COLOR_SUNK_ZONE):
+        if btn.cget('bg') in (COLOR_HIT, COLOR_MISS, COLOR_SHIP, COLOR_SUNK_ZONE):  #не трогаем уже закрашенные клетки
             return
-        btn.config(bg=COLOR_EMPTY_HVR if entering else COLOR_EMPTY)
+        btn.config(bg=COLOR_EMPTY_HVR if entering else COLOR_EMPTY)  #делаем светлее при наведении мыши
 
     def _click(self, row, col):
         """Передаёт клик во внешний обработчик.
         принимает: row - int, col - int
         возвращает: None
         """
-        if self.on_click:
-            self.on_click(row, col)
+        if self.on_click:  #проверяем, задан ли обработчик
+            self.on_click(row, col)   #если да, вызываем SeaBattleApp._player_shot с координатами клетки
 
     def set_cell(self, row, col, state):
         """Обновляет цвет клетки по её состоянию.
@@ -107,21 +100,20 @@ class BoardWidget:
         возвращает: None
         """
         colors = {
-            'ship':  COLOR_SHIP,
+            'ship':  COLOR_SHIP,  #набор цветов для клеток
             'hit':   COLOR_HIT,
             'miss':  COLOR_MISS,
             'zone':  COLOR_SUNK_ZONE,
             'empty': COLOR_EMPTY,
         }
-        self.buttons[(row, col)].config(bg=colors.get(state, COLOR_EMPTY))
+        self.buttons[(row, col)].config(bg=colors.get(state, COLOR_EMPTY))  #применяем нужный цвет или если state неизвестен, ставим пустой
 
     def mark_sunk_zone(self, zone_cells):
         """Закрашивает клетки вокруг потопленного корабля.
         принимает: zone_cells - set[tuple[int, int]]
         возвращает: None
         """
-        for r, c in zone_cells:
-            # попадания не перекрашиваем
+        for r, c in zone_cells:  #перебираем все клетки зазора, красим клетку в цвет зазора и запоминаем зазор для дальнейшей блокировки
             if self.buttons[(r, c)].cget('bg') != COLOR_HIT:
                 self.set_cell(r, c, 'zone')
         self.sunk_zones.update(zone_cells)
@@ -131,7 +123,7 @@ class BoardWidget:
         принимает: нет
         возвращает: None
         """
-        for btn in self.buttons.values():
+        for btn in self.buttons.values():  #перебираем все кнопоки и блокируем их, ставя курсор-стрелочку
             btn.config(state='disabled', cursor='arrow')
 
 class SeaBattleApp:

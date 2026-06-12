@@ -14,18 +14,18 @@ def make_board():
     принимает: нет
     возвращает: list[list[str]] - двумерный список размера SIZE x SIZE
     """
-    return [[EMPTY] * SIZE for _ in range(SIZE)]
+    return [[EMPTY] * SIZE for _ in range(SIZE)]  #создаём список из 10 строк, каждая по 10 пустых клеток
 
 def can_place(board, cells):
     """Проверяет, можно ли поставить корабль в клетки с учётом зазора.
     принимает: board - list[list[str]] - поле, cells - list[tuple[int, int]] - клетки корабля
     возвращает: bool - True если корабль можно поставить
     """
-    for r, c in cells:
-        for dr in range(-1, 2):
+    for r, c in cells:  #перебираем каждую клетку будущего корабля
+        for dr in range(-1, 2):  #смещаемся по строке и столбцу
             for dc in range(-1, 2):
-                nr, nc = r + dr, c + dc
-                if 0 <= nr < SIZE and 0 <= nc < SIZE and board[nr][nc] == SHIP:
+                nr, nc = r + dr, c + dc  #координаты соседней клетки
+                if 0 <= nr < SIZE and 0 <= nc < SIZE and board[nr][nc] == SHIP:  #если сосед в пределах поля и уже занят
                     return False
     return True
 
@@ -34,79 +34,79 @@ def place_ships(board):
     принимает: board - list[list[str]] - поле для расстановки
     возвращает: None - изменяет поле на месте
     """
-    for length in SHIPS:
+    for length in SHIPS:  #перебираем длины кораблей по очереди
         placed = False
 
-        while not placed:
+        while not placed:  #пока не найдём подходящее место, случайно выбираем ориентацию корабля
             horizontal = random.choice([True, False])
 
-            if horizontal:
+            if horizontal:  #для горизонтального корабля выбираем любую строку, а для столбца делаем запас
                 row = random.randint(0, SIZE - 1)
                 col = random.randint(0, SIZE - length)
-            else:
+            else:  #для вертикальныого корабля наоборот
                 row = random.randint(0, SIZE - length)
                 col = random.randint(0, SIZE - 1)
 
             cells = [
-                (row, col + i) if horizontal else (row + i, col)
+                (row, col + i) if horizontal else (row + i, col)  #для горизонтали смещаем столбец, для вертикали смещаем строку
                 for i in range(length)
             ]
 
-            if can_place(board, cells):
+            if can_place(board, cells):  #проверяем, не нарушается ли зазор и не перекрывается ли другой корабль
                 for r, c in cells:
                     board[r][c] = SHIP
-                placed = True
+                placed = True  #в случае успеха выходим из while
 
 def all_ships_sunk(board):
     """Проверяет, потоплены ли все корабли на поле.
     принимает: board - list[list[str]] - игровое поле
     возвращает: bool - True если живых клеток кораблей не осталось
     """
-    return all(cell != SHIP for row in board for cell in row)
+    return all(cell != SHIP for row in board for cell in row)  #если ни одной клетки SHIP не осталось, то возвращает true
 
 def find_ship_cells(board, row, col):
     """Находит все клетки одного корабля по подбитой клетке.
     принимает: board - list[list[str]] - поле, row - int - строка, col - int - столбец
     возвращает: list[tuple[int, int]] - список клеток найденного корабля
     """
-    stack = [(row, col)]
+    stack = [(row, col)]  #стек для поиска корабля, начиная с подбитой клетки
     visited = set()
     cells = []
 
-    while stack:
+    while stack:  #пока есть клетки для проверки, берём следующую клетку из стека
         r, c = stack.pop()
 
-        if (r, c) in visited:
+        if (r, c) in visited:  #пропускаем, если уже проверяли эту клетку
             continue
 
         visited.add((r, c))
 
-        if board[r][c] not in (HIT, SHIP):
+        if board[r][c] not in (HIT, SHIP):  #пропускаем, если клетка не является частью корабля
             continue
 
-        cells.append((r, c))
+        cells.append((r, c))  #если клетка часть корабля, добавляем в результат
 
-        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:  #смотрим координаты соседней клетки по четырём направлениям
             nr, nc = r + dr, c + dc
-            if 0 <= nr < SIZE and 0 <= nc < SIZE and (nr, nc) not in visited:
-                if board[nr][nc] in (HIT, SHIP):
+            if 0 <= nr < SIZE and 0 <= nc < SIZE and (nr, nc) not in visited:  #если сосед в пределах поля и не проверен
+                if board[nr][nc] in (HIT, SHIP):  #и если сосед тоже часть корабля, то добавляем его в стек для проверки
                     stack.append((nr, nc))
 
-    return cells
+    return cells  #в конце возвращаем все найденные клетки корабля
 
 def get_zone_around(ship_cells):
     """Возвращает клетки вокруг потопленного корабля.
     принимает: ship_cells - list[tuple[int, int]] - клетки корабля
     возвращает: set[tuple[int, int]] - множество клеток вокруг корабля
     """
-    ship_set = set(ship_cells)
+    ship_set = set(ship_cells)  #задаём множество клеток корабля
     zone = set()
 
-    for r, c in ship_cells:
+    for r, c in ship_cells:  #перебираем каждую клетку и смещаемся по строке и по столбцу
         for dr in range(-1, 2):
             for dc in range(-1, 2):
-                nr, nc = r + dr, c + dc
-                if 0 <= nr < SIZE and 0 <= nc < SIZE and (nr, nc) not in ship_set:
+                nr, nc = r + dr, c + dc  #координаты потенциальной клетки зазора
+                if 0 <= nr < SIZE and 0 <= nc < SIZE and (nr, nc) not in ship_set:  #если клетка в пределах поля и не сам корабль, то добавляем клетку в зазор
                     zone.add((nr, nc))
 
     return zone
@@ -116,54 +116,54 @@ def _process_hit(board, row, col):
     принимает: board - list[list[str]] - поле, row - int - строка, col - int - столбец
     возвращает: tuple[list[tuple[int, int]], bool] - клетки корабля и флаг потопления
     """
-    ship_cells = find_ship_cells(board, row, col)
+    ship_cells = find_ship_cells(board, row, col)  #находим все клетки корабля, в который попали, и если среди клеток корабля не осталось живых
     sunk = all(board[r][c] != SHIP for r, c in ship_cells)
-    return ship_cells, sunk
+    return ship_cells, sunk  #возвращаем клетки и флаг
 
 def _get_hunt_targets(board, hit_cells):
     """Вычисляет приоритетные цели для добивания корабля.
     принимает: board - list[list[str]] - поле игрока, hit_cells - list[tuple[int, int]] - подбитые клетки
     возвращает: list[tuple[int, int]] - список целей в порядке приоритета
     """
-    if len(hit_cells) >= 2:
-        rows = [r for r, _ in hit_cells]
-        cols = [c for _, c in hit_cells]
+    if len(hit_cells) >= 2:  #если известны минимум две подбитые клетки, то можно определить направление корабля
+        rows = [r for r, _ in hit_cells]  #список строк подбитых клеток
+        cols = [c for _, c in hit_cells]  #список столбцов подбитых клеток
 
-        if len(set(rows)) == 1:
-            row = rows[0]
+        if len(set(rows)) == 1:  #если все подбитые клетки в одной строке, то корабль горизонтальный
+            row = rows[0]  #задаём строку и крайние подбитые столбцы
             min_col = min(cols)
             max_col = max(cols)
             targets = []
 
-            if max_col + 1 < SIZE and board[row][max_col + 1] not in (HIT, MISS):
+            if max_col + 1 < SIZE and board[row][max_col + 1] not in (HIT, MISS):  #если клетка справа существует и не обстреляна
                 targets.append((row, max_col + 1))
-            if min_col - 1 >= 0 and board[row][min_col - 1] not in (HIT, MISS):
+            if min_col - 1 >= 0 and board[row][min_col - 1] not in (HIT, MISS):  #если клетка слева существует и не обстреляна
                 targets.append((row, min_col - 1))
 
-            return targets
+            return targets  #возвращаем цели по краям
 
-        if len(set(cols)) == 1:
-            col = cols[0]
+        if len(set(cols)) == 1:  #если все подбитые клетки в одном столбце, то корабль вертикальный
+            col = cols[0]  #задаём столбец и крайние подбитые строки
             min_row = min(rows)
             max_row = max(rows)
             targets = []
 
-            if max_row + 1 < SIZE and board[max_row + 1][col] not in (HIT, MISS):
+            if max_row + 1 < SIZE and board[max_row + 1][col] not in (HIT, MISS):  #если клетка снизу существует и не обстреляна
                 targets.append((max_row + 1, col))
-            if min_row - 1 >= 0 and board[min_row - 1][col] not in (HIT, MISS):
+            if min_row - 1 >= 0 and board[min_row - 1][col] not in (HIT, MISS):  #если клетка сверху существует и не обстреляна
                 targets.append((min_row - 1, col))
 
-            return targets
+            return targets  #возвращаем цели по краям
 
-    r0, c0 = hit_cells[0]
+    r0, c0 = hit_cells[0]  #если только одна подбитая клетка, то направление неизвестно
     targets = []
 
-    for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+    for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:  #берём четыре направления и координаты соседней клетки
         nr, nc = r0 + dr, c0 + dc
-        if 0 <= nr < SIZE and 0 <= nc < SIZE and board[nr][nc] not in (HIT, MISS):
+        if 0 <= nr < SIZE and 0 <= nc < SIZE and board[nr][nc] not in (HIT, MISS):  #если сосед в пределах поля и не обстрелян, то добавляем как потенциальную цель
             targets.append((nr, nc))
 
-    return targets
+    return targets  #возвращаем всех четырёх соседей как цели
 
 # Никитка
 class PlacementController:
@@ -171,62 +171,62 @@ class PlacementController:
 
     def __init__(self):
         """Создаёт контроллер ручной расстановки."""
-        self.board = make_board()
+        self.board = make_board()  #пустое поле, на котором будем расставлять корабли
         self.ship_index = 0
         self.horizontal = True
-        self.ships = list(SHIPS)
+        self.ships = list(SHIPS)  #копируем список длин кораблей, чтобы не менять глобальный SHIPS
 
     def toggle_orientation(self):
         """Меняет ориентацию текущего корабля."""
-        self.horizontal = not self.horizontal
+        self.horizontal = not self.horizontal  #переключаем значения true/false(горизонтально/вертикально)
 
     def get_next_ship_length(self):
         """Возвращает длину следующего корабля."""
-        if self.ship_index >= len(self.ships):
+        if self.ship_index >= len(self.ships):  #если все корабли уже расставлены, возвращаем None
             return None
-        return self.ships[self.ship_index]
+        return self.ships[self.ship_index]  #иначе возвращаем длину следующего ещё не поставленного корабля
 
     def is_finished(self):
         """Проверяет, завершена ли ручная расстановка."""
-        return self.ship_index >= len(self.ships)
+        return self.ship_index >= len(self.ships)  #возвращает true если индекс вышел за пределы списка кораблей
 
     def get_ship_cells(self, row, col):
         """Возвращает клетки текущего корабля по стартовой позиции.
         принимает: row - int - строка, col - int - столбец
         возвращает: list[tuple[int, int]] - список клеток или пустой список
         """
-        if self.is_finished():
+        if self.is_finished():  #проверка, если расстановка уже завершена
             return []
 
         length = self.ships[self.ship_index]
-        cells = []
+        cells = []  #список клеток, которые займёт корабль
 
-        for i in range(length):
-            r = row if self.horizontal else row + i
-            c = col + i if self.horizontal else col
+        for i in range(length):  #перебираем каждую часть корабля
+            r = row if self.horizontal else row + i  #при горизонтали не меняем строку, а при вертикали смещаемся вниз
+            c = col + i if self.horizontal else col  #при горизонтали смещаемся вправо, при вертикали не меняем
 
-            if not (0 <= r < SIZE and 0 <= c < SIZE):
+            if not (0 <= r < SIZE and 0 <= c < SIZE):  #если клетка выходит за границы поля
                 return []
 
-            cells.append((r, c))
+            cells.append((r, c))  #добавляем допустимую клетку в список
 
-        return cells
+        return cells  #возвращаем все клетки корабля
 
     def place_ship(self, row, col):
         """Пытается поставить очередной корабль.
         принимает: row - int - строка, col - int - столбец
         возвращает: list[tuple[int, int]] - клетки поставленного корабля или пустой список
         """
-        cells = self.get_ship_cells(row, col)
+        cells = self.get_ship_cells(row, col)  #вычисляем клетки корабля по позиции и ориентации
 
         if not cells or not can_place(self.board, cells):
             return []
 
-        for r, c in cells:
+        for r, c in cells:  #перебираем все клетки и отмечаем занятые
             self.board[r][c] = SHIP
 
         self.ship_index += 1
-        return cells
+        return cells  #возвращаем клетки успешно поставленного корабля
 
 # Миша
 class Game:
